@@ -83,6 +83,42 @@
         </div>
       </div>
 
+      <!-- Section 2b: Language & Subtitle Customization -->
+      <div class="control-group" id="langGroup" style="margin-top: 8px;">
+        <div class="label-row">
+          <label class="group-label">Ngôn ngữ dịch phụ đề</label>
+          <span class="badge-studio" id="langModeBadge">🌐 Đa ngôn ngữ</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+          <div>
+            <label class="hint-text" style="display:block; margin-bottom: 3px; font-weight:600;" for="targetLang1Select">Dịch 1 (Chính):</label>
+            <select id="targetLang1Select" class="styled-select" style="font-size: 11px; padding: 6px 6px;">
+              <option value="vi">🇻🇳 Tiếng Việt</option>
+              <option value="en">🇬🇧 Tiếng Anh</option>
+              <option value="ja">🇯🇵 Tiếng Nhật</option>
+              <option value="zh-CN">🇨🇳 Tiếng Trung</option>
+              <option value="ko">🇰🇷 Tiếng Hàn</option>
+              <option value="fr">🇫🇷 Tiếng Pháp</option>
+              <option value="de">🇩🇪 Tiếng Đức</option>
+              <option value="es">🇪🇸 Tây Ban Nha</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="hint-text" style="display:block; margin-bottom: 3px; font-weight:600;" for="targetLang2Select">Dịch 2 (Phụ):</label>
+            <select id="targetLang2Select" class="styled-select" style="font-size: 11px; padding: 6px 6px;">
+              <option value="en">🇬🇧 Tiếng Anh</option>
+              <option value="vi">🇻🇳 Tiếng Việt</option>
+              <option value="ja">🇯🇵 Tiếng Nhật</option>
+              <option value="zh-CN">🇨🇳 Tiếng Trung</option>
+              <option value="ko">🇰🇷 Tiếng Hàn</option>
+              <option value="none">🚫 Tắt dòng 2</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <!-- Section 3: Feature Toggles -->
       <div class="toggles-grid">
         <label class="toggle-card" id="cardTTSToggle">
@@ -96,10 +132,28 @@
 
         <label class="toggle-card">
           <div class="toggle-info">
-            <span class="toggle-name">Phụ đề song ngữ</span>
-            <span class="toggle-desc">Hiển thị phụ đề Anh - Việt</span>
+            <span class="toggle-name">Bật phụ đề</span>
+            <span class="toggle-desc">Hiển thị chữ trên màn hình</span>
           </div>
           <input type="checkbox" id="showSubtitlesToggle" checked>
+          <span class="checkbox-visual"></span>
+        </label>
+
+        <label class="toggle-card">
+          <div class="toggle-info">
+            <span class="toggle-name">Hiện câu gốc</span>
+            <span class="toggle-desc">Chữ gốc Nhật / Anh</span>
+          </div>
+          <input type="checkbox" id="showOriginalToggle" checked>
+          <span class="checkbox-visual"></span>
+        </label>
+
+        <label class="toggle-card">
+          <div class="toggle-info">
+            <span class="toggle-name">Họp Teams / Meet</span>
+            <span class="toggle-desc">Tự tắt TTS, nổi cố định</span>
+          </div>
+          <input type="checkbox" id="meetingModeToggle">
           <span class="checkbox-visual"></span>
         </label>
 
@@ -169,8 +223,8 @@
     <!-- Footer Stats -->
     <footer class="popup-footer">
       <div class="footer-stat">
-        <span class="stat-icon">🎓</span>
-        <span>Coursera • LinkedIn • Udemy • YouTube</span>
+        <span class="stat-icon">💼</span>
+        <span>Teams • Meet • YouTube • Coursera • Udemy</span>
       </div>
     </footer>
   </div>

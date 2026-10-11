@@ -30,6 +30,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const showSubtitlesToggle = document.getElementById('showSubtitlesToggle');
   const autoRateToggle = document.getElementById('autoRateToggle');
+  const showOriginalToggle = document.getElementById('showOriginalToggle');
+  const meetingModeToggle = document.getElementById('meetingModeToggle');
+
+  const targetLang1Select = document.getElementById('targetLang1Select');
+  const targetLang2Select = document.getElementById('targetLang2Select');
 
   const ttsEngineSelect = document.getElementById('ttsEngineSelect');
   const openaiConfigGroup = document.getElementById('openaiConfigGroup');
@@ -235,7 +240,11 @@ document.addEventListener('DOMContentLoaded', () => {
     'openaiApiKey',
     'openaiVoice',
     'subtitlePosition',
-    'fontSize'
+    'fontSize',
+    'targetLang1',
+    'targetLang2',
+    'showOriginal',
+    'meetingMode'
   ], (res) => {
     // Enabled
     const isEnabled = res.enabled !== false;
@@ -249,6 +258,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Toggles
     showSubtitlesToggle.checked = res.showSubtitles !== false;
     autoRateToggle.checked = res.autoRate !== false;
+    if (showOriginalToggle) showOriginalToggle.checked = res.showOriginal !== false;
+    if (meetingModeToggle) meetingModeToggle.checked = res.meetingMode === true;
+
+    // Language Selects
+    if (targetLang1Select) targetLang1Select.value = res.targetLang1 || 'vi';
+    if (targetLang2Select) targetLang2Select.value = res.targetLang2 || 'en';
 
     // Sliders
     const vol = res.dubbingVolume !== undefined ? Math.round(res.dubbingVolume * 100) : 100;
@@ -325,6 +340,35 @@ document.addEventListener('DOMContentLoaded', () => {
   showSubtitlesToggle.addEventListener('change', () => {
     chrome.storage.local.set({ showSubtitles: showSubtitlesToggle.checked });
   });
+
+  if (showOriginalToggle) {
+    showOriginalToggle.addEventListener('change', () => {
+      chrome.storage.local.set({ showOriginal: showOriginalToggle.checked });
+    });
+  }
+
+  if (meetingModeToggle) {
+    meetingModeToggle.addEventListener('change', () => {
+      const isMeeting = meetingModeToggle.checked;
+      chrome.storage.local.set({ meetingMode: isMeeting });
+      if (isMeeting) {
+        // Automatically mute TTS when meeting mode is activated
+        handleTTSToggleChange(false);
+      }
+    });
+  }
+
+  if (targetLang1Select) {
+    targetLang1Select.addEventListener('change', () => {
+      chrome.storage.local.set({ targetLang1: targetLang1Select.value });
+    });
+  }
+
+  if (targetLang2Select) {
+    targetLang2Select.addEventListener('change', () => {
+      chrome.storage.local.set({ targetLang2: targetLang2Select.value });
+    });
+  }
 
   autoRateToggle.addEventListener('change', () => {
     chrome.storage.local.set({ autoRate: autoRateToggle.checked });

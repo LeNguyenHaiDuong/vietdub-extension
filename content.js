@@ -46,7 +46,11 @@
     selectedVoice: 'vi-VN-HoaiMyNeural',
     ttsEngine: 'auto',
     subtitlePosition: 'bottom',
-    fontSize: 18
+    fontSize: 18,
+    targetLang1: 'vi',      // Primary Target Language (e.g. 'vi', 'en', 'ja'...)
+    targetLang2: 'en',      // Secondary Target Language (e.g. 'en', 'vi', or 'none')
+    showOriginal: true,     // Toggle display of original spoken language
+    meetingMode: false      // Live meeting mode optimized for Teams/Meet
   };
 
   let activeVideo = null;
@@ -193,12 +197,16 @@
   };
 
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // 3. UI Injections (Subtitle Overlay & HUD Chip)
   // ---------------------------------------------------------------------------
   function findVideoContainer(video) {
-    if (!video) return null;
     const platform = window.VietDubPlatforms.detectPlatform();
     const adapter = window.VietDubPlatforms.getAdapters()[platform];
+    if (adapter && adapter.isMeeting) {
+      return document.body;
+    }
+    if (!video) return document.body;
     let container = null;
 
     if (adapter && adapter.subtitleContainerParent) {
@@ -208,7 +216,7 @@
       container = video.parentElement || video;
     }
 
-    if (window.getComputedStyle(container).position === 'static') {
+    if (container !== document.body && window.getComputedStyle(container).position === 'static') {
       container.style.position = 'relative';
     }
     return container;
@@ -225,8 +233,10 @@
       subtitleOverlay = document.createElement('div');
       subtitleOverlay.className = 'vietdub-subtitle-overlay hidden';
       subtitleOverlay.innerHTML = `
-        <span class="vietdub-sub-original" id="vietdubSubOrig"></span>
-        <span class="vietdub-sub-translated" id="vietdubSubTrans"></span>
+        <div class="vietdub-sub-speaker" id="vietdubSubSpeaker"></div>
+        <div class="vietdub-sub-original" id="vietdubSubOrig"></div>
+        <div class="vietdub-sub-trans1" id="vietdubSubTrans1"></div>
+        <div class="vietdub-sub-trans2" id="vietdubSubTrans2"></div>
       `;
       videoContainer.appendChild(subtitleOverlay);
     }
@@ -238,7 +248,7 @@
       }
       hudChip = document.createElement('div');
       hudChip.className = 'vietdub-hud-chip';
-      hudChip.title = 'Bật/Tắt Lồng tiếng & Phụ đề Việt (VietDub)';
+      hudChip.title = 'Bật/Tắt Lồng tiếng & Phụ đề (VietDub)';
       hudChip.innerHTML = `
         <span class="hud-dot"></span>
         <span class="hud-label">VietDub</span>
@@ -261,6 +271,16 @@
   function updateOverlayUI() {
     if (!subtitleOverlay) return;
 
+    const platform = window.VietDubPlatforms.detectPlatform();
+    const adapter = window.VietDubPlatforms.getAdapters()[platform];
+    const isMeeting = adapter && adapter.isMeeting;
+
+    if (state.meetingMode || isMeeting) {
+      subtitleOverlay.classList.add('meeting-mode');
+    } else {
+      subtitleOverlay.classList.remove('meeting-mode');
+    }
+
     if (state.subtitlePosition === 'top') {
       subtitleOverlay.classList.add('pos-top');
     } else {
@@ -279,7 +299,7 @@
     if (state.enabled) {
       hudChip.classList.remove('disabled');
       hudChip.classList.add('active');
-      if (!state.enableTTS) {
+      if (!state.enableTTS || state.meetingMode) {
         hudChip.querySelector('.hud-label').textContent = 'VietDub: Phụ đề';
         const wave = hudChip.querySelector('.vietdub-wave-indicator');
         if (wave) wave.remove();
@@ -295,21 +315,58 @@
     }
   }
 
-  function displaySubtitles(original, translated, durationSec) {
+  function displaySubtitles(original, trans1, trans2 = '', speaker = '', durationSec = 3.5) {
     if (!subtitleOverlay || !state.showSubtitles || !state.enabled) return;
 
     // Safety check: Ensure overlay is still attached to live DOM
-    if (!subtitleOverlay.isConnected && activeVideo) {
-      const container = findVideoContainer(activeVideo);
+    if (!subtitleOverlay.isConnected) {
+      const container = activeVideo ? findVideoContainer(activeVideo) : document.body;
       createUI(container);
     }
 
+    const speakerEl = subtitleOverlay.querySelector('#vietdubSubSpeaker');
     const origEl = subtitleOverlay.querySelector('#vietdubSubOrig');
-    const transEl = subtitleOverlay.querySelector('#vietdubSubTrans');
+    const trans1El = subtitleOverlay.querySelector('#vietdubSubTrans1');
+    const trans2El = subtitleOverlay.querySelector('#vietdubSubTrans2');
 
-    if (origEl) origEl.textContent = original;
-    if (transEl) {
-      transEl.innerHTML = `<span class="highlight-vi">${translated}</span>`;
+    if (speakerEl) {
+      if (speaker) {
+        speakerEl.textContent = speaker;
+        speakerEl.style.display = 'inline-block';
+      } else {
+        speakerEl.textContent = '';
+        speakerEl.style.display = 'none';
+      }
+    }
+
+    if (origEl) {
+      if (state.showOriginal && original) {
+        origEl.textContent = original;
+        origEl.style.display = 'block';
+      } else {
+        origEl.textContent = '';
+        origEl.style.display = 'none';
+      }
+    }
+
+    if (trans1El) {
+      if (trans1) {
+        trans1El.innerHTML = `<span class="highlight-vi">${trans1}</span>`;
+        trans1El.style.display = 'block';
+      } else {
+        trans1El.textContent = '';
+        trans1El.style.display = 'none';
+      }
+    }
+
+    if (trans2El) {
+      if (state.targetLang2 && state.targetLang2 !== 'none' && trans2 && trans2 !== trans1) {
+        trans2El.textContent = trans2;
+        trans2El.style.display = 'block';
+      } else {
+        trans2El.textContent = '';
+        trans2El.style.display = 'none';
+      }
     }
 
     subtitleOverlay.classList.remove('hidden');
@@ -318,8 +375,8 @@
       clearTimeout(subtitleHideTimeout);
     }
 
-    // Auto hide overlay after duration + 1.2s padding
-    const hideDelay = Math.max((durationSec || 3.5) * 1000 + 1200, 2500);
+    // Auto hide overlay after duration + 1.5s padding
+    const hideDelay = Math.max((durationSec || 3.5) * 1000 + 1500, 3200);
     subtitleHideTimeout = setTimeout(() => {
       if (subtitleOverlay) {
         subtitleOverlay.classList.add('hidden');
@@ -333,40 +390,47 @@
   async function processCue(rawText, startTime = null, endTime = null) {
     if (!rawText || !state.enabled) return;
 
-    const sanitizeFn = translator.sanitizeSubtitle || translator.sanitizeCue;
-    const sanitized = sanitizeFn.call(translator, rawText);
-    if (!sanitized) return;
+    const { speaker, text } = translator.parseSpeakerAndText(rawText);
+    if (!text) return;
 
     // Dedup identical consecutive cues
-    if (sanitized === lastProcessedText) return;
-    lastProcessedText = sanitized;
+    if (text === lastProcessedText) return;
+    lastProcessedText = text;
 
     const duration = (endTime !== null && startTime !== null && endTime > startTime)
       ? (endTime - startTime)
       : 3.5;
 
-    // Check synchronous cache first (0ms instantaneous lookup)
-    const cachedTranslation = translator.getCached(sanitized);
+    const target1 = state.targetLang1 || 'vi';
+    const target2 = state.targetLang2 || 'none';
 
-    if (cachedTranslation) {
+    const platform = window.VietDubPlatforms.detectPlatform();
+    const adapter = window.VietDubPlatforms.getAdapters()[platform];
+    const isMeeting = adapter && adapter.isMeeting;
+    const allowTTS = state.enabled && state.enableTTS && (!state.meetingMode && !isMeeting);
+
+    // Check synchronous cache first (0ms instantaneous lookup)
+    const cached = translator.getCachedMulti(text, target1, target2);
+
+    if (cached) {
       // 0ms Cache Hit: Display and Speak IMMEDIATELY!
-      displaySubtitles(sanitized, cachedTranslation, duration);
-      if (state.enabled && state.enableTTS && activeVideo && !activeVideo.paused) {
-        ttsEngine.speak(cachedTranslation, duration);
+      displaySubtitles(text, cached.trans1, cached.trans2, speaker, duration);
+      if (allowTTS && activeVideo && !activeVideo.paused) {
+        ttsEngine.speak(cached.trans1, duration);
       }
     } else {
-      // Phase 1 (0ms): Immediately show the original cue so the user sees text with ZERO delay!
-      displaySubtitles(sanitized, '⏳ Đang dịch...', duration);
+      // Phase 1 (0ms preview): show original cue immediately
+      displaySubtitles(text, '⏳ Đang dịch...', '', speaker, duration);
 
       // Phase 2: Translate in background and update instantly upon resolution
-      const translated = await translator.translate(sanitized);
+      const res = await translator.translateMulti(text, target1, target2);
 
-      // Update line 2 with translated Vietnamese
-      displaySubtitles(sanitized, translated, duration);
+      // Update subtitle lines
+      displaySubtitles(text, res.trans1, res.trans2, speaker, duration);
 
-      // Speak Vietnamese voice
-      if (state.enabled && state.enableTTS && activeVideo && !activeVideo.paused) {
-        ttsEngine.speak(translated, duration);
+      // Speak voice if enabled
+      if (allowTTS && activeVideo && !activeVideo.paused) {
+        ttsEngine.speak(res.trans1, duration);
       }
     }
   }
@@ -385,7 +449,7 @@
       .map(c => c.text);
 
     if (upcoming.length > 0) {
-      translator.prefetchUpcoming(upcoming);
+      translator.prefetchUpcoming(upcoming, state.targetLang1 || 'vi', state.targetLang2 || 'none');
     }
   }
 
@@ -472,6 +536,26 @@
   // ---------------------------------------------------------------------------
   // 6. DOM Subtitle Observer (For YouTube, Custom Video.js, Coursera Transcript)
   // ---------------------------------------------------------------------------
+  let liveMeetingDebounceTimer = null;
+  function handleLiveMeetingCue(text) {
+    if (!text) return;
+    const { speaker, text: cleanText } = translator.parseSpeakerAndText(text);
+    if (!cleanText || cleanText === lastProcessedText) return;
+
+    // Show immediate preview
+    const cached = translator.getCachedMulti(cleanText, state.targetLang1, state.targetLang2);
+    if (cached) {
+      displaySubtitles(cleanText, cached.trans1, cached.trans2, speaker);
+    } else {
+      displaySubtitles(cleanText, '⏳ Đang dịch...', '', speaker, 2.5);
+    }
+
+    if (liveMeetingDebounceTimer) clearTimeout(liveMeetingDebounceTimer);
+    liveMeetingDebounceTimer = setTimeout(() => {
+      processCue(text);
+    }, 280);
+  }
+
   function hookDOMSubtitles() {
     if (domSubtitleObserver) {
       domSubtitleObserver.disconnect();
@@ -479,16 +563,22 @@
 
     const platform = window.VietDubPlatforms.detectPlatform();
     const adapter = window.VietDubPlatforms.getAdapters()[platform];
+    const isMeeting = adapter && adapter.isMeeting;
 
     domSubtitleObserver = new MutationObserver(() => {
       if (!state.enabled) return;
 
       for (const selector of adapter.subtitleSelectors) {
-        const el = document.querySelector(selector);
-        if (el && el.textContent) {
-          const text = el.textContent.trim();
+        const elements = document.querySelectorAll(selector);
+        if (elements && elements.length > 0) {
+          const lastEl = elements[elements.length - 1];
+          const text = (lastEl ? lastEl.textContent : '').trim();
           if (text && text !== lastProcessedText) {
-            processCue(text);
+            if (isMeeting) {
+              handleLiveMeetingCue(text);
+            } else {
+              processCue(text);
+            }
             break;
           }
         }
@@ -684,6 +774,19 @@
   // 9. Platform Scanner Loop (Continuous Health Check & SPA Navigation Poller)
   // ---------------------------------------------------------------------------
   function scanForVideo() {
+    const platform = window.VietDubPlatforms.detectPlatform();
+    const adapter = window.VietDubPlatforms.getAdapters()[platform];
+    const isMeeting = adapter && adapter.isMeeting;
+
+    // Special Handling for Live Meeting Platforms (Teams, Meet):
+    // Do not require a big playing <video> element to show live captions!
+    if (isMeeting) {
+      if (!subtitleOverlay || !subtitleOverlay.isConnected || !hudChip || !hudChip.isConnected) {
+        createUI(document.body);
+      }
+      hookDOMSubtitles();
+    }
+
     // 1. Check if video/lecture changed in SPA
     const currentId = getVideoIdentifier();
     if (currentId && currentId !== lastVideoIdentifier) {

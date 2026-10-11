@@ -73,6 +73,10 @@ chrome.runtime.onInstalled.addListener(() => {
     'fontSize',
     'openaiApiKey',
     'openaiVoice',
+    'targetLang1',
+    'targetLang2',
+    'showOriginal',
+    'meetingMode',
     'statsTranslatedCues'
   ], (res) => {
     const defaults = {
@@ -80,15 +84,19 @@ chrome.runtime.onInstalled.addListener(() => {
       enableTTS: true,           // Toggle AI Voice Dubbing (TTS)
       showSubtitles: true,
       dubbingVolume: 1.0,
-      duckingRatio: 0.25,        // Lower video sound to 25% when Vietnamese voice speaks
+      duckingRatio: 0.25,        // Lower video sound to 25% when voice speaks
       speechRate: 1.05,
       autoRate: true,            // Automatically sync speech speed to subtitle line duration
       selectedVoice: 'vi-VN-HoaiMyNeural', // Studio Grade Neural Voice as default
-      ttsEngine: 'auto',         // 'auto' (Studio Edge Neural by default), 'edge-neural', 'openai', 'chrome-tts', 'google-stream'
+      ttsEngine: 'auto',         // 'auto', 'edge-neural', 'openai', 'chrome-tts', 'google-stream'
       subtitlePosition: 'bottom',// 'bottom' or 'top'
       fontSize: 18,
       openaiApiKey: '',
       openaiVoice: 'nova',
+      targetLang1: 'vi',         // Primary translation language (Default: Tiếng Việt)
+      targetLang2: 'en',         // Secondary translation language (Default: Tiếng Anh or 'none')
+      showOriginal: true,        // Show original spoken line (Japanese, English, etc.)
+      meetingMode: false,        // Meeting mode optimized for Teams/Meet (mute TTS, floating sub)
       statsTranslatedCues: 0
     };
 
@@ -139,16 +147,20 @@ function escapeXml(unsafe) {
   });
 }
 
-async function translateToVietnamese(text) {
+async function translateText(text, targetLang = 'vi', sourceLang = 'auto') {
   const cleaned = cleanText(text);
   if (!cleaned) return '';
 
-  if (translationCache.has(cleaned)) {
-    return translationCache.get(cleaned);
+  if (targetLang === 'none') return '';
+  if (sourceLang !== 'auto' && sourceLang === targetLang) return cleaned;
+
+  const cacheKey = `${targetLang}:${sourceLang}:${cleaned}`;
+  if (translationCache.has(cacheKey)) {
+    return translationCache.get(cacheKey);
   }
 
   try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=vi&dt=t&q=${encodeURIComponent(cleaned)}`;
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(cleaned)}`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Translation API error: ${response.status}`);
@@ -165,11 +177,11 @@ async function translateToVietnamese(text) {
       translated = cleaned;
     }
 
-    if (translationCache.size > 2000) {
+    if (translationCache.size > 3000) {
       const firstKey = translationCache.keys().next().value;
       translationCache.delete(firstKey);
     }
-    translationCache.set(cleaned, translated);
+    translationCache.set(cacheKey, translated);
 
     chrome.storage.local.get(['statsTranslatedCues'], (res) => {
       const current = res.statsTranslatedCues || 0;
@@ -178,9 +190,27 @@ async function translateToVietnamese(text) {
 
     return translated;
   } catch (err) {
-    console.warn('[VietDub Background] Translate failed:', err);
+    console.warn(`[VietDub Background] Translate (${targetLang}) failed:`, err);
     return cleaned;
   }
+}
+
+async function translateMulti(text, targetLang1 = 'vi', targetLang2 = 'none', sourceLang = 'auto') {
+  const cleaned = cleanText(text);
+  if (!cleaned) return { trans1: '', trans2: '' };
+
+  const p1 = translateText(cleaned, targetLang1, sourceLang);
+  const p2 = (targetLang2 && targetLang2 !== 'none' && targetLang2 !== targetLang1)
+    ? translateText(cleaned, targetLang2, sourceLang)
+    : Promise.resolve('');
+
+  const [trans1, trans2] = await Promise.all([p1, p2]);
+  return { trans1, trans2 };
+}
+
+// Backwards-compatible wrapper
+async function translateToVietnamese(text) {
+  return translateText(text, 'vi', 'auto');
 }
 
 // -----------------------------------------------------------------------------
@@ -458,18 +488,30 @@ async function getTTSAudioBase64(text, options = {}) {
 // 6. Message Dispatcher for Content Scripts & Popup
 // -----------------------------------------------------------------------------
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  // 1. Translation
+  // 1. Single Translation (supports any target language)
   if (request.action === 'TRANSLATE_TEXT') {
-    translateToVietnamese(request.text)
+    const targetLang = request.targetLang || 'vi';
+    translateText(request.text, targetLang, request.sourceLang || 'auto')
       .then(translation => sendResponse({ success: true, translation }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  // 1b. Multi-Language Translation (Dual phase for bilingual subtitles)
+  if (request.action === 'TRANSLATE_MULTI') {
+    const targetLang1 = request.targetLang1 || 'vi';
+    const targetLang2 = request.targetLang2 || 'none';
+    translateMulti(request.text, targetLang1, targetLang2, request.sourceLang || 'auto')
+      .then(res => sendResponse({ success: true, trans1: res.trans1, trans2: res.trans2 }))
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
 
   // 2. Batch pre-fetch
   if (request.action === 'PREFETCH_TRANSLATIONS') {
+    const targetLang = request.targetLang || 'vi';
     if (Array.isArray(request.texts)) {
-      Promise.all(request.texts.map(t => translateToVietnamese(t)))
+      Promise.all(request.texts.map(t => translateText(t, targetLang)))
         .then(() => sendResponse({ success: true }))
         .catch(() => sendResponse({ success: false }));
     } else {

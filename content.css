@@ -30,36 +30,91 @@
   top: 40px;
 }
 
+/* Meeting Mode (Fixed Floating Subtitle Overlay for Teams/Meet) */
+.vietdub-subtitle-overlay.meeting-mode {
+  position: fixed !important;
+  bottom: 85px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 2147483647 !important;
+  max-width: 90% !important;
+  min-width: 320px;
+  background: rgba(6, 10, 20, 0.92);
+  border-color: rgba(0, 242, 254, 0.55);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.85), 0 0 20px rgba(0, 242, 254, 0.25);
+}
+
 .vietdub-subtitle-overlay.hidden {
   opacity: 0;
   pointer-events: none;
   transform: translateX(-50%) translateY(8px);
 }
 
-/* Original Language Line (English) */
+/* Speaker Name Tag in Live Meetings */
+.vietdub-sub-speaker {
+  display: inline-block;
+  font-size: 0.82em;
+  color: #facc15;
+  font-weight: 700;
+  background: rgba(250, 204, 21, 0.16);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  border-radius: 4px;
+  padding: 1px 8px;
+  margin-bottom: 4px;
+  text-shadow: none;
+  letter-spacing: 0.3px;
+}
+
+.vietdub-sub-speaker:empty {
+  display: none;
+}
+
+/* Original Spoken Language Line (Japanese, English, etc.) */
 .vietdub-sub-original {
   display: block;
-  font-size: 0.88em;
-  color: #94a3b8;
+  font-size: 0.9em;
+  color: #cbd5e1;
   font-weight: 500;
   line-height: 1.35;
   margin-bottom: 3px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
 }
 
-/* Translated Vietnamese Line */
+.vietdub-sub-original:empty {
+  display: none;
+}
+
+/* Primary Translation Line (e.g. Vietnamese) */
+.vietdub-sub-trans1,
 .vietdub-sub-translated {
   display: block;
-  font-size: 1.15em;
-  color: #ffffff;
+  font-size: 1.18em;
+  color: #00f2fe;
   font-weight: 700;
   line-height: 1.4;
   letter-spacing: 0.2px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 242, 254, 0.4);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95), 0 0 12px rgba(0, 242, 254, 0.4);
 }
 
+.vietdub-sub-trans1 .highlight-vi,
 .vietdub-sub-translated .highlight-vi {
   color: #00f2fe;
+}
+
+/* Secondary Translation Line (e.g. English) */
+.vietdub-sub-trans2 {
+  display: block;
+  font-size: 1.05em;
+  color: #00ff87;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 3px;
+  letter-spacing: 0.1px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 255, 135, 0.35);
+}
+
+.vietdub-sub-trans2:empty {
+  display: none;
 }
 
 /* Quick HUD Control Chip on Video Corner */

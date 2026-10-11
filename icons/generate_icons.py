@@ -43,7 +43,10 @@ def create_vietdub_icon(size):
         
     return img
 
+from pathlib import Path
+
+icons_dir = Path(__file__).parent
 for s in [16, 48, 128]:
     icon = create_vietdub_icon(s)
-    icon.save(f"/home/duongle/vietdub-extension/icons/icon{s}.png")
+    icon.save(icons_dir / f"icon{s}.png")
     print(f"Generated icon{s}.png")
