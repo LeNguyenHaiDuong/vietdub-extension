@@ -15,6 +15,25 @@
   const translator = new window.VietDubTranslator();
   const ttsEngine = new window.VietDubTTSEngine();
 
+  // Helper to extract canonical video/lecture identifier (immune to timestamp/hash changes)
+  function getVideoIdentifier(urlStr = window.location.href) {
+    try {
+      const url = new URL(urlStr);
+      // YouTube: Video ID parameter
+      if (url.hostname.includes('youtube.com')) {
+        const v = url.searchParams.get('v');
+        if (v) return `yt:${v}`;
+        if (url.pathname.startsWith('/shorts/')) {
+          return `yt-shorts:${url.pathname.split('/')[2] || url.pathname}`;
+        }
+      }
+      // Educational & generic platforms (Coursera, Udemy, LinkedIn): Pathname represents the lecture
+      return `${url.origin}${url.pathname}`;
+    } catch (_) {
+      return (urlStr || '').split('?')[0].split('#')[0];
+    }
+  }
+
   // State Management
   let state = {
     enabled: true,
@@ -33,7 +52,7 @@
   let activeVideo = null;
   let activeTrack = null;
   let lastVideoSrc = '';
-  let lastPageUrl = window.location.href;
+  let lastVideoIdentifier = getVideoIdentifier();
   let lastProcessedText = '';
   let subtitleHideTimeout = null;
   let originalVideoVolume = 1.0;
@@ -64,6 +83,10 @@
         });
         updateOverlayUI();
         updateHudChipUI();
+
+        if (state.enabled) {
+          scanForVideo();
+        }
       }
     });
   }
@@ -75,11 +98,33 @@
       }
     }
 
-    // If TTS or extension is toggled off, immediately stop speaking and restore original video volume
-    if (
-      (changes.enableTTS && !changes.enableTTS.newValue) ||
-      (changes.enabled && !changes.enabled.newValue)
-    ) {
+    // Master enabled toggle change
+    if (changes.enabled) {
+      if (changes.enabled.newValue) {
+        console.log('[VietDub] Extension activated via settings');
+        scanForVideo();
+        if (activeVideo) {
+          inspectTracks();
+        }
+      } else {
+        console.log('[VietDub] Extension deactivated via settings');
+        ttsEngine.stop();
+        if (isDucking && activeVideo) {
+          activeVideo.volume = originalVideoVolume;
+          isDucking = false;
+        }
+        if (subtitleOverlay) {
+          subtitleOverlay.classList.add('hidden');
+        }
+        if (hudChip) {
+          const wave = hudChip.querySelector('.vietdub-wave-indicator');
+          if (wave) wave.remove();
+        }
+      }
+    }
+
+    // TTS toggle change
+    if (changes.enableTTS && !changes.enableTTS.newValue) {
       ttsEngine.stop();
       if (isDucking && activeVideo) {
         activeVideo.volume = originalVideoVolume;
@@ -224,7 +269,7 @@
 
     subtitleOverlay.style.fontSize = `${state.fontSize}px`;
 
-    if (!state.showSubtitles) {
+    if (!state.showSubtitles || !state.enabled) {
       subtitleOverlay.classList.add('hidden');
     }
   }
@@ -251,7 +296,7 @@
   }
 
   function displaySubtitles(original, translated, durationSec) {
-    if (!subtitleOverlay || !state.showSubtitles) return;
+    if (!subtitleOverlay || !state.showSubtitles || !state.enabled) return;
 
     // Safety check: Ensure overlay is still attached to live DOM
     if (!subtitleOverlay.isConnected && activeVideo) {
@@ -288,7 +333,8 @@
   async function processCue(rawText, startTime = null, endTime = null) {
     if (!rawText || !state.enabled) return;
 
-    const sanitized = translator.sanitizeCue(rawText);
+    const sanitizeFn = translator.sanitizeSubtitle || translator.sanitizeCue;
+    const sanitized = sanitizeFn.call(translator, rawText);
     if (!sanitized) return;
 
     // Dedup identical consecutive cues
@@ -384,7 +430,7 @@
       activeTrack = bestTrack;
       console.log('[VietDub] Successfully attached to textTrack:', bestTrack.label || bestTrack.language || bestTrack.kind);
 
-      // Must set mode to 'hidden' (or 'showing') so the browser engine actually parses and emits cues!
+      // Must set mode to 'hidden' (or 'showing') so browser parses and emits cues
       if (bestTrack.mode === 'disabled') {
         bestTrack.mode = 'hidden';
       }
@@ -408,7 +454,7 @@
 
     inspectTracks();
 
-    // Listen to all track list mutation events
+    // Listen to track list mutation events
     video.textTracks.addEventListener('addtrack', inspectTracks);
     video.textTracks.addEventListener('change', inspectTracks);
     video.textTracks.addEventListener('removetrack', inspectTracks);
@@ -424,7 +470,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 6. DOM Subtitle Observer (For YouTube, Custom Video.js, etc.)
+  // 6. DOM Subtitle Observer (For YouTube, Custom Video.js, Coursera Transcript)
   // ---------------------------------------------------------------------------
   function hookDOMSubtitles() {
     if (domSubtitleObserver) {
@@ -473,7 +519,7 @@
           return;
         }
       }
-      if (attempts >= 12) { // 12 attempts * 250ms = 3 seconds
+      if (attempts >= 15) { // 15 attempts * 250ms = 3.75 seconds
         clearInterval(rapidScanTimer);
         rapidScanTimer = null;
       }
@@ -495,7 +541,7 @@
     activeTrack = null;
     lastPrefetchTime = 0;
 
-    // 3. Hide subtitle overlay until new video's subtitles arrive
+    // 3. Clear and hide subtitle overlay until new video's subtitles arrive
     if (subtitleOverlay) {
       subtitleOverlay.classList.add('hidden');
       const origEl = subtitleOverlay.querySelector('#vietdubSubOrig');
@@ -504,7 +550,7 @@
       if (transEl) transEl.innerHTML = '';
     }
 
-    // 4. Re-mount UI in new container if container changed
+    // 4. Re-mount UI in container of active video
     if (activeVideo) {
       const container = findVideoContainer(activeVideo);
       createUI(container);
@@ -516,13 +562,13 @@
   }
 
   function setupNavigationObserver() {
-    const notifyNavigation = () => {
-      const newUrl = window.location.href;
-      if (newUrl !== lastPageUrl) {
-        console.log('[VietDub] SPA navigation detected:', lastPageUrl, '->', newUrl);
-        lastPageUrl = newUrl;
-        handleVideoTransition('SPA_URL_CHANGE');
-        setTimeout(scanForVideo, 200);
+    const checkNavigation = (source) => {
+      const currentId = getVideoIdentifier();
+      if (currentId && currentId !== lastVideoIdentifier) {
+        console.log(`[VietDub] SPA lecture transition detected via ${source}:`, lastVideoIdentifier, '->', currentId);
+        lastVideoIdentifier = currentId;
+        handleVideoTransition(`SPA_${source}`);
+        setTimeout(scanForVideo, 250);
       }
     };
 
@@ -530,21 +576,20 @@
     const origPushState = history.pushState;
     history.pushState = function (...args) {
       const ret = origPushState.apply(this, args);
-      notifyNavigation();
+      checkNavigation('PUSHSTATE');
       return ret;
     };
 
     const origReplaceState = history.replaceState;
     history.replaceState = function (...args) {
       const ret = origReplaceState.apply(this, args);
-      notifyNavigation();
+      checkNavigation('REPLACESTATE');
       return ret;
     };
 
-    window.addEventListener('popstate', notifyNavigation);
-    window.addEventListener('hashchange', notifyNavigation);
-    window.addEventListener('yt-navigate-finish', notifyNavigation);
-    window.addEventListener('yt-page-data-updated', notifyNavigation);
+    window.addEventListener('popstate', () => checkNavigation('POPSTATE'));
+    window.addEventListener('hashchange', () => checkNavigation('HASHCHANGE'));
+    window.addEventListener('yt-navigate-finish', () => checkNavigation('YT_NAVIGATE'));
   }
 
   // ---------------------------------------------------------------------------
@@ -553,10 +598,8 @@
   function attachVideoHooks(video) {
     if (!video) return;
 
-    const currentSrc = video.currentSrc || video.src || '';
-    const isNewSrc = currentSrc && currentSrc !== lastVideoSrc;
-
     activeVideo = video;
+    const currentSrc = video.currentSrc || video.src || '';
     if (currentSrc) {
       lastVideoSrc = currentSrc;
     }
@@ -566,11 +609,8 @@
     const container = findVideoContainer(video);
     createUI(container);
 
-    // If this video element was already hooked with event listeners, just handle transition if src changed
+    // If this video element was already hooked with event listeners, just return
     if (video._vietDubHooked) {
-      if (isNewSrc) {
-        handleVideoTransition('SRC_CHANGE');
-      }
       return;
     }
     video._vietDubHooked = true;
@@ -587,34 +627,18 @@
     video.addEventListener('play', unlockAudio);
     video.addEventListener('playing', unlockAudio);
 
-    // Video Lifecycle Events - detect next video in playlist or lecture change
-    video.addEventListener('loadstart', () => {
-      const src = video.currentSrc || video.src || '';
-      if (src && src !== lastVideoSrc) {
-        lastVideoSrc = src;
-        handleVideoTransition('LOADSTART');
-      }
-    });
-
+    // Metadata loaded: inspect text tracks (do NOT call handleVideoTransition)
     video.addEventListener('loadedmetadata', () => {
-      const src = video.currentSrc || video.src || '';
-      if (src && src !== lastVideoSrc) {
-        lastVideoSrc = src;
-      }
-      handleVideoTransition('LOADEDMETADATA');
-    });
-
-    video.addEventListener('emptied', () => {
-      handleVideoTransition('EMPTIED');
-    });
-
-    video.addEventListener('pause', () => {
-      ttsEngine.pause();
+      inspectTracks();
     });
 
     video.addEventListener('play', () => {
       ttsEngine.resume();
       inspectTracks();
+    });
+
+    video.addEventListener('pause', () => {
+      ttsEngine.pause();
     });
 
     video.addEventListener('seeking', () => {
@@ -628,7 +652,7 @@
       }
     });
 
-    // Time update listener: fast 250ms synchronization loop
+    // Time update listener: fast synchronization loop
     video.addEventListener('timeupdate', () => {
       if (!state.enabled) return;
 
@@ -660,23 +684,33 @@
   // 9. Platform Scanner Loop (Continuous Health Check & SPA Navigation Poller)
   // ---------------------------------------------------------------------------
   function scanForVideo() {
-    // 1. Check if page URL changed in SPA
-    const currentUrl = window.location.href;
-    if (currentUrl !== lastPageUrl) {
-      lastPageUrl = currentUrl;
-      handleVideoTransition('URL_POLL');
+    // 1. Check if video/lecture changed in SPA
+    const currentId = getVideoIdentifier();
+    if (currentId && currentId !== lastVideoIdentifier) {
+      console.log('[VietDub] Poller detected lecture change:', lastVideoIdentifier, '->', currentId);
+      lastVideoIdentifier = currentId;
+      handleVideoTransition('POLL_ID_CHANGE');
     }
 
-    // 2. Discover video element
+    // 2. Discover active video element
     const video = window.VietDubPlatforms.findVideoElement();
     if (!video) return;
 
     const currentSrc = video.currentSrc || video.src || '';
 
-    // If new video element OR video src changed
-    if (video !== activeVideo || (currentSrc && currentSrc !== lastVideoSrc)) {
+    // If active video element changed entirely
+    if (video !== activeVideo) {
       attachVideoHooks(video);
       return;
+    }
+
+    // If video source changed on same element (only if lastVideoSrc was already set!)
+    if (lastVideoSrc && currentSrc && currentSrc !== lastVideoSrc) {
+      lastVideoSrc = currentSrc;
+      handleVideoTransition('SRC_CHANGE');
+      return;
+    } else if (currentSrc && !lastVideoSrc) {
+      lastVideoSrc = currentSrc;
     }
 
     // 3. Ensure UI is still attached to the live document

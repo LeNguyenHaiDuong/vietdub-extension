@@ -68,15 +68,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (engine === 'openai') {
+    const vName = (voiceName || '').toLowerCase();
+    const eng = (engine || '').toLowerCase();
+
+    if (eng === 'openai') {
       voiceQualityBadge.textContent = '🤖 OpenAI Studio';
       voiceQualityBadge.style.color = '#00ff87';
       voiceQualityBadge.style.borderColor = 'rgba(0, 255, 135, 0.4)';
-    } else if (voiceName.includes('Neural') || engine === 'edge-neural' || engine === 'auto') {
+    } else if (vName.includes('neural') || eng === 'edge-neural' || eng === 'auto') {
       voiceQualityBadge.textContent = '✨ Studio 24kHz';
       voiceQualityBadge.style.color = 'var(--accent-cyan)';
       voiceQualityBadge.style.borderColor = 'rgba(0, 242, 254, 0.4)';
-    } else if (engine === 'chrome-tts' || engine === 'web-speech') {
+    } else if (eng === 'chrome-tts' || eng === 'web-speech') {
       voiceQualityBadge.textContent = '🖥️ Hệ thống';
       voiceQualityBadge.style.color = '#facc15';
       voiceQualityBadge.style.borderColor = 'rgba(250, 204, 21, 0.4)';
