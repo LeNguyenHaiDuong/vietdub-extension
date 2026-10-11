@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "VietDub - Lồng tiếng Việt Video & Phụ đề AI",
+  "version": "1.0.0",
+  "description": "Lồng tiếng Việt thời gian thực (Audio Dubbing) và phụ đề song ngữ cho Coursera, LinkedIn Learning, Udemy, YouTube...",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://*.coursera.org/*",
+    "*://*.linkedin.com/*",
+    "*://*.udemy.com/*",
+    "*://*.youtube.com/*",
+    "*://translate.googleapis.com/*",
+    "*://translate.google.com/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "lib/translator.js",
+        "lib/tts-engine.js",
+        "lib/platforms.js",
+        "content.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "VietDub Control Center",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*.png",
+        "content.css"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

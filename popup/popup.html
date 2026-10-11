@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VietDub - Control Center</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="brand">
+        <img src="../icons/icon48.png" alt="VietDub" class="brand-icon">
+        <div class="brand-text">
+          <h1 class="brand-title">VietDub</h1>
+          <span class="brand-subtitle">AI Video Dubbing</span>
+        </div>
+      </div>
+      <!-- Master Switch -->
+      <label class="switch" title="Bật/Tắt Lồng tiếng">
+        <input type="checkbox" id="masterToggle" checked>
+        <span class="slider"></span>
+      </label>
+    </header>
+
+    <!-- Status Banner -->
+    <div class="status-banner" id="statusBanner">
+      <span class="status-dot"></span>
+      <span class="status-text" id="statusText">Đang kích hoạt trên video</span>
+    </div>
+
+    <!-- Main Content -->
+    <main class="popup-body">
+      <!-- Section 1: Voice & Engine -->
+      <div class="control-group">
+        <label class="group-label" for="voiceSelect">Giọng đọc Tiếng Việt</label>
+        <div class="select-wrapper">
+          <select id="voiceSelect" class="styled-select">
+            <option value="">Đang tìm giọng đọc tiếng Việt...</option>
+          </select>
+          <button type="button" id="testVoiceBtn" class="action-btn" title="Nghe thử giọng">
+            🔊 Thử giọng
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 2: Audio & Ducking Controls -->
+      <div class="control-group">
+        <div class="slider-row">
+          <label class="slider-label" for="dubbingVolume">Âm lượng lồng tiếng</label>
+          <span class="slider-val" id="dubbingVolumeVal">100%</span>
+        </div>
+        <input type="range" id="dubbingVolume" min="0" max="100" value="100" class="styled-range">
+      </div>
+
+      <div class="control-group">
+        <div class="slider-row">
+          <label class="slider-label" for="duckingRatio">Giảm âm video gốc khi nói</label>
+          <span class="slider-val" id="duckingRatioVal">25%</span>
+        </div>
+        <input type="range" id="duckingRatio" min="5" max="50" value="25" class="styled-range">
+        <span class="hint-text">Tự động hạ âm lượng video gốc khi lồng tiếng nói</span>
+      </div>
+
+      <div class="control-group">
+        <div class="slider-row">
+          <label class="slider-label" for="speechRate">Tốc độ đọc cơ bản</label>
+          <span class="slider-val" id="speechRateVal">1.05x</span>
+        </div>
+        <input type="range" id="speechRate" min="80" max="180" value="105" step="5" class="styled-range">
+      </div>
+
+      <!-- Section 3: Feature Toggles -->
+      <div class="toggles-grid">
+        <label class="toggle-card">
+          <div class="toggle-info">
+            <span class="toggle-name">Phụ đề song ngữ</span>
+            <span class="toggle-desc">Hiển thị phụ đề Anh - Việt</span>
+          </div>
+          <input type="checkbox" id="showSubtitlesToggle" checked>
+          <span class="checkbox-visual"></span>
+        </label>
+
+        <label class="toggle-card">
+          <div class="toggle-info">
+            <span class="toggle-name">Tự đồng bộ tốc độ</span>
+            <span class="toggle-desc">Khớp thời lượng câu nói</span>
+          </div>
+          <input type="checkbox" id="autoRateToggle" checked>
+          <span class="checkbox-visual"></span>
+        </label>
+      </div>
+
+      <!-- Section 4: Advanced Dropdown -->
+      <details class="advanced-section">
+        <summary class="advanced-summary">Tùy chỉnh nâng cao</summary>
+        <div class="advanced-body">
+          <div class="control-group">
+            <label class="group-label" for="ttsEngineSelect">Cơ chế phát âm (Engine)</label>
+            <select id="ttsEngineSelect" class="styled-select">
+              <option value="web-speech">Web Speech API (Mặc định - Chrome/Edge)</option>
+              <option value="google-tts">Google TTS Stream (Dự phòng chất lượng cao)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label class="group-label" for="subtitlePosSelect">Vị trí phụ đề</label>
+            <select id="subtitlePosSelect" class="styled-select">
+              <option value="bottom">Phía dưới video (Bottom)</option>
+              <option value="top">Phía trên video (Top)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <div class="slider-row">
+              <label class="slider-label" for="fontSizeRange">Cỡ chữ phụ đề</label>
+              <span class="slider-val" id="fontSizeVal">18px</span>
+            </div>
+            <input type="range" id="fontSizeRange" min="14" max="28" value="18" class="styled-range">
+          </div>
+        </div>
+      </details>
+    </main>
+
+    <!-- Footer Stats -->
+    <footer class="popup-footer">
+      <div class="footer-stat">
+        <span class="stat-icon">🎓</span>
+        <span>Hỗ trợ: Coursera, LinkedIn, Udemy, YouTube</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
