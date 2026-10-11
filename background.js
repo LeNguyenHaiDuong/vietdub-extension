@@ -61,6 +61,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
   chrome.storage.local.get([
     'enabled',
+    'enableTTS',
     'showSubtitles',
     'dubbingVolume',
     'duckingRatio',
@@ -76,6 +77,7 @@ chrome.runtime.onInstalled.addListener(() => {
   ], (res) => {
     const defaults = {
       enabled: true,
+      enableTTS: true,           // Toggle AI Voice Dubbing (TTS)
       showSubtitles: true,
       dubbingVolume: 1.0,
       duckingRatio: 0.25,        // Lower video sound to 25% when Vietnamese voice speaks

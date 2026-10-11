@@ -17,12 +17,13 @@
   // State Management
   let state = {
     enabled: true,
+    enableTTS: true,
     showSubtitles: true,
     dubbingVolume: 1.0,
     duckingRatio: 0.25,
     speechRate: 1.05,
     autoRate: true,
-    selectedVoice: '',
+    selectedVoice: 'vi-VN-HoaiMyNeural',
     ttsEngine: 'auto',
     subtitlePosition: 'bottom',
     fontSize: 18
@@ -69,6 +70,22 @@
       }
     }
 
+    // If TTS or extension is toggled off, immediately stop speaking and restore original video volume
+    if (
+      (changes.enableTTS && !changes.enableTTS.newValue) ||
+      (changes.enabled && !changes.enabled.newValue)
+    ) {
+      ttsEngine.stop();
+      if (isDucking && activeVideo) {
+        activeVideo.volume = originalVideoVolume;
+        isDucking = false;
+      }
+      if (hudChip) {
+        const wave = hudChip.querySelector('.vietdub-wave-indicator');
+        if (wave) wave.remove();
+      }
+    }
+
     ttsEngine.setOptions({
       volume: state.dubbingVolume,
       duckingRatio: state.duckingRatio,
@@ -86,7 +103,7 @@
   // 2. Audio Ducking Callbacks
   // ---------------------------------------------------------------------------
   ttsEngine.onSpeechStart = () => {
-    if (!activeVideo || !state.enabled) return;
+    if (!activeVideo || !state.enabled || !state.enableTTS) return;
 
     if (!isDucking) {
       originalVideoVolume = activeVideo.volume;
@@ -187,7 +204,13 @@
     if (state.enabled) {
       hudChip.classList.remove('disabled');
       hudChip.classList.add('active');
-      hudChip.querySelector('.hud-label').textContent = 'VietDub: BẬT';
+      if (!state.enableTTS) {
+        hudChip.querySelector('.hud-label').textContent = 'VietDub: Phụ đề';
+        const wave = hudChip.querySelector('.vietdub-wave-indicator');
+        if (wave) wave.remove();
+      } else {
+        hudChip.querySelector('.hud-label').textContent = 'VietDub: BẬT';
+      }
     } else {
       hudChip.classList.remove('active');
       hudChip.classList.add('disabled');
@@ -238,7 +261,7 @@
     if (cachedTranslation) {
       // 0ms Cache Hit: Display and Speak IMMEDIATELY!
       displaySubtitles(sanitized, cachedTranslation, duration);
-      if (activeVideo && !activeVideo.paused) {
+      if (state.enabled && state.enableTTS && activeVideo && !activeVideo.paused) {
         ttsEngine.speak(cachedTranslation, duration);
       }
     } else {
@@ -252,7 +275,7 @@
       displaySubtitles(sanitized, translated, duration);
 
       // Speak Vietnamese voice
-      if (state.enabled && activeVideo && !activeVideo.paused) {
+      if (state.enabled && state.enableTTS && activeVideo && !activeVideo.paused) {
         ttsEngine.speak(translated, duration);
       }
     }

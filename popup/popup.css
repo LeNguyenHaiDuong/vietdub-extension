@@ -127,6 +127,57 @@ body {
   transform: translateX(20px);
 }
 
+/* Small Switch for TTS in Section Header */
+.switch-sm {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+}
+
+.switch-sm input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-sm .slider-sm {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #334155;
+  transition: .25s ease;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.switch-sm .slider-sm:before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: .25s ease;
+  border-radius: 50%;
+}
+
+.switch-sm input:checked + .slider-sm {
+  background: linear-gradient(135deg, #00f2fe, #00ff87);
+  box-shadow: 0 0 8px rgba(0, 255, 135, 0.4);
+}
+
+.switch-sm input:checked + .slider-sm:before {
+  transform: translateX(14px);
+}
+
+.label-with-switch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
 /* Status Banner */
 .status-banner {
   display: flex;
@@ -370,6 +421,17 @@ body {
   font-size: 11px;
   font-weight: 900;
   color: #000;
+}
+
+.toggle-card-full {
+  grid-column: span 2;
+}
+
+.muted-dimmed {
+  opacity: 0.38 !important;
+  pointer-events: none !important;
+  filter: grayscale(0.7);
+  transition: all 0.25s ease;
 }
 
 /* Advanced Accordion */

@@ -9,6 +9,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusBanner = document.getElementById('statusBanner');
   const statusText = document.getElementById('statusText');
 
+  // TTS Toggle Elements (Synchronized switch + card)
+  const enableTTSToggle = document.getElementById('enableTTSToggle');
+  const enableTTSToggleCard = document.getElementById('enableTTSToggleCard');
+  const ttsSelectWrapper = document.getElementById('ttsSelectWrapper');
+  const ttsSlidersGroup = document.getElementById('ttsSlidersGroup');
+
   const voiceSelect = document.getElementById('voiceSelect');
   const testVoiceBtn = document.getElementById('testVoiceBtn');
   const voiceQualityBadge = document.getElementById('voiceQualityBadge');
@@ -36,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const fontSizeVal = document.getElementById('fontSizeVal');
 
   let currentAudioTest = null;
+  let isTTSCurrentlyEnabled = true;
   let availableVoices = [
     {
       name: 'vi-VN-HoaiMyNeural',
@@ -50,10 +57,17 @@ document.addEventListener('DOMContentLoaded', () => {
   ];
 
   // ---------------------------------------------------------------------------
-  // 1. Populate Available Vietnamese Voices
+  // 1. Badge & Status Updates
   // ---------------------------------------------------------------------------
   function updateBadge(voiceName, engine) {
     if (!voiceQualityBadge) return;
+    if (!isTTSCurrentlyEnabled) {
+      voiceQualityBadge.textContent = '🔇 Đã tắt TTS';
+      voiceQualityBadge.style.color = '#94a3b8';
+      voiceQualityBadge.style.borderColor = 'rgba(148, 163, 184, 0.4)';
+      return;
+    }
+
     if (engine === 'openai') {
       voiceQualityBadge.textContent = '🤖 OpenAI Studio';
       voiceQualityBadge.style.color = '#00ff87';
@@ -73,6 +87,57 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function updateStatusBanner(enabled, ttsEnabled = isTTSCurrentlyEnabled) {
+    if (enabled) {
+      statusBanner.classList.remove('disabled');
+      if (!ttsEnabled) {
+        statusText.textContent = 'VietDub đang chạy: Chỉ hiện phụ đề';
+      } else {
+        statusText.textContent = 'VietDub đang kích hoạt trên video';
+      }
+    } else {
+      statusBanner.classList.add('disabled');
+      statusText.textContent = 'VietDub đang tạm tắt';
+    }
+  }
+
+  // Set TTS Enabled / Disabled UI State
+  function setTTSStateUI(enabled) {
+    isTTSCurrentlyEnabled = enabled;
+    if (enableTTSToggle) enableTTSToggle.checked = enabled;
+    if (enableTTSToggleCard) enableTTSToggleCard.checked = enabled;
+
+    if (enabled) {
+      if (ttsSelectWrapper) ttsSelectWrapper.classList.remove('muted-dimmed');
+      if (ttsSlidersGroup) ttsSlidersGroup.classList.remove('muted-dimmed');
+      if (testVoiceBtn) {
+        testVoiceBtn.disabled = false;
+        testVoiceBtn.title = 'Nghe thử giọng';
+      }
+    } else {
+      if (ttsSelectWrapper) ttsSelectWrapper.classList.add('muted-dimmed');
+      if (ttsSlidersGroup) ttsSlidersGroup.classList.add('muted-dimmed');
+      if (testVoiceBtn) {
+        testVoiceBtn.disabled = true;
+        testVoiceBtn.title = 'Bật lồng tiếng TTS để nghe thử';
+      }
+      if (currentAudioTest) {
+        try { currentAudioTest.pause(); currentAudioTest = null; } catch (_) {}
+      }
+    }
+
+    updateBadge(voiceSelect.value, ttsEngineSelect.value);
+    updateStatusBanner(masterToggle.checked, enabled);
+  }
+
+  function handleTTSToggleChange(val) {
+    setTTSStateUI(val);
+    chrome.storage.local.set({ enableTTS: val });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. Populate Available Vietnamese Voices
+  // ---------------------------------------------------------------------------
   function renderVoiceDropdown(selectedName = 'vi-VN-HoaiMyNeural') {
     voiceSelect.innerHTML = '';
 
@@ -152,10 +217,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------------------------------------------------------------------------
-  // 2. Load & Sync State from Chrome Storage
+  // 3. Load & Sync State from Chrome Storage
   // ---------------------------------------------------------------------------
   chrome.storage.local.get([
     'enabled',
+    'enableTTS',
     'showSubtitles',
     'dubbingVolume',
     'duckingRatio',
@@ -171,7 +237,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Enabled
     const isEnabled = res.enabled !== false;
     masterToggle.checked = isEnabled;
-    updateStatusBanner(isEnabled);
+
+    // TTS Toggle
+    const isTTS = res.enableTTS !== false;
+    setTTSStateUI(isTTS);
+    updateStatusBanner(isEnabled, isTTS);
 
     // Toggles
     showSubtitlesToggle.checked = res.showSubtitles !== false;
@@ -218,16 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
     fontSizeVal.textContent = `${size}px`;
   });
 
-  function updateStatusBanner(enabled) {
-    if (enabled) {
-      statusBanner.classList.remove('disabled');
-      statusText.textContent = 'VietDub đang kích hoạt trên video';
-    } else {
-      statusBanner.classList.add('disabled');
-      statusText.textContent = 'VietDub đang tạm tắt';
-    }
-  }
-
   function toggleOpenAIFields(engine) {
     const isShowing = engine === 'openai';
     if (openaiConfigGroup) {
@@ -239,13 +299,25 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. Event Listeners & Real-Time Persistence
+  // 4. Event Listeners & Real-Time Persistence
   // ---------------------------------------------------------------------------
   masterToggle.addEventListener('change', () => {
     const val = masterToggle.checked;
-    updateStatusBanner(val);
+    updateStatusBanner(val, isTTSCurrentlyEnabled);
     chrome.storage.local.set({ enabled: val });
   });
+
+  if (enableTTSToggle) {
+    enableTTSToggle.addEventListener('change', () => {
+      handleTTSToggleChange(enableTTSToggle.checked);
+    });
+  }
+
+  if (enableTTSToggleCard) {
+    enableTTSToggleCard.addEventListener('change', () => {
+      handleTTSToggleChange(enableTTSToggleCard.checked);
+    });
+  }
 
   showSubtitlesToggle.addEventListener('change', () => {
     chrome.storage.local.set({ showSubtitles: showSubtitlesToggle.checked });
@@ -304,9 +376,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 4. Test Voice Button (Plays High-Definition 24kHz Studio Audio)
+  // 5. Test Voice Button (Plays High-Definition 24kHz Studio Audio)
   // ---------------------------------------------------------------------------
   testVoiceBtn.addEventListener('click', () => {
+    if (!isTTSCurrentlyEnabled) return;
+
     if (currentAudioTest) {
       try {
         currentAudioTest.pause();
