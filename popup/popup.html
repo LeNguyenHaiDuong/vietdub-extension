@@ -34,10 +34,14 @@
     <main class="popup-body">
       <!-- Section 1: Voice & Engine -->
       <div class="control-group">
-        <label class="group-label" for="voiceSelect">Giọng đọc Tiếng Việt</label>
+        <div class="label-row">
+          <label class="group-label" for="voiceSelect">Giọng đọc Tiếng Việt</label>
+          <span class="badge-studio" id="voiceQualityBadge">✨ Studio 24kHz</span>
+        </div>
         <div class="select-wrapper">
           <select id="voiceSelect" class="styled-select">
-            <option value="">Đang tìm giọng đọc tiếng Việt...</option>
+            <option value="vi-VN-HoaiMyNeural">🌟 Hoài My (Nữ - Truyền cảm VTV)</option>
+            <option value="vi-VN-NamMinhNeural">🌟 Nam Minh (Nam - Trầm ấm chuyên nghiệp)</option>
           </select>
           <button type="button" id="testVoiceBtn" class="action-btn" title="Nghe thử giọng">
             🔊 Thử giọng
@@ -94,15 +98,35 @@
 
       <!-- Section 4: Advanced Dropdown -->
       <details class="advanced-section">
-        <summary class="advanced-summary">Tùy chỉnh nâng cao</summary>
+        <summary class="advanced-summary">Tùy chỉnh nâng cao &amp; API AI</summary>
         <div class="advanced-body">
           <div class="control-group">
-            <label class="group-label" for="ttsEngineSelect">Cơ chế phát âm (Engine)</label>
+            <label class="group-label" for="ttsEngineSelect">Cơ chế âm thanh (Engine)</label>
             <select id="ttsEngineSelect" class="styled-select">
-              <option value="auto">Tự động (Ưu tiên giọng tự nhiên &amp; dự phòng chuẩn)</option>
-              <option value="chrome-tts">Native Chrome TTS (Hệ thống Chrome)</option>
-              <option value="google-stream">Google Stream (Không lo lỗi hệ điều hành)</option>
-              <option value="web-speech">Web Speech API</option>
+              <option value="auto">✨ Tự động (Ưu tiên giọng Studio Neural 24kHz)</option>
+              <option value="edge-neural">🌟 Microsoft Edge Neural (Cực tự nhiên - Miễn phí 100%)</option>
+              <option value="openai">🤖 OpenAI TTS (Dùng OpenAI API Key cá nhân)</option>
+              <option value="chrome-tts">🖥️ Native Chrome TTS (Hệ thống máy tính)</option>
+              <option value="google-stream">🌐 Google Stream (Dự phòng)</option>
+              <option value="web-speech">🗣️ Web Speech API</option>
+            </select>
+          </div>
+
+          <!-- OpenAI API Key configuration (visible when OpenAI selected or configured) -->
+          <div class="control-group" id="openaiConfigGroup">
+            <label class="group-label" for="openaiApiKeyInput">OpenAI API Key (Tùy chọn)</label>
+            <input type="password" id="openaiApiKeyInput" placeholder="sk-..." class="styled-input" autocomplete="off">
+            <span class="hint-text">Dùng OpenAI TTS-1 Nova/Alloy cho độ chân thực cao nhất</span>
+          </div>
+
+          <div class="control-group" id="openaiVoiceGroup">
+            <label class="group-label" for="openaiVoiceSelect">Giọng OpenAI</label>
+            <select id="openaiVoiceSelect" class="styled-select">
+              <option value="nova">Nova (Nữ - Truyền cảm, tự nhiên nhất)</option>
+              <option value="alloy">Alloy (Trung tính, chuẩn mực)</option>
+              <option value="shimmer">Shimmer (Nữ - Trong trẻo)</option>
+              <option value="onyx">Onyx (Nam - Trầm ấm, dõng dạc)</option>
+              <option value="echo">Echo (Nam - Rõ ràng)</option>
             </select>
           </div>
 
@@ -129,7 +153,7 @@
     <footer class="popup-footer">
       <div class="footer-stat">
         <span class="stat-icon">🎓</span>
-        <span>Hỗ trợ: Coursera, LinkedIn, Udemy, YouTube</span>
+        <span>Coursera • LinkedIn • Udemy • YouTube</span>
       </div>
     </footer>
   </div>

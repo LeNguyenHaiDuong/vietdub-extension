@@ -27,11 +27,12 @@
 5. **Nút điều khiển nhanh (On-Video Quick HUD):**
    - Một chip điều khiển nhỏ gọn `[VietDub: BẬT/TẮT]` hiển thị ngay góc trên video giúp bạn bật/tắt lồng tiếng chỉ với 1 cú click mà không cần mở popup extension.
 
-6. **Đa dạng giọng đọc tiếng Việt:**
-   - Hỗ trợ các giọng tiếng Việt chất lượng cao tích hợp sẵn:
-     - **Microsoft HoaiMy / NamMinh Online (Natural)** (Trên Microsoft Edge hoặc Windows Chrome)
-     - **Google Tiếng Việt** (Trên Chrome)
-     - Giọng **Google TTS Audio Stream** dự phòng cho máy không cài sẵn gói ngôn ngữ.
+6. **Đột phá chất lượng giọng Studio Neural 24kHz (AI Hoài My & Nam Minh):**
+   - Đã loại bỏ hoàn toàn giọng robot kim loại cũ! Tích hợp trực tiếp công nghệ **Microsoft Edge Neural Speech 24kHz Studio HD**:
+     - 🌟 **Hoài My Neural (Nữ):** Giọng đọc truyền cảm, ấm áp, ngắt nghỉ tự nhiên như phát thanh viên đài truyền hình VTV.
+     - 🌟 **Nam Minh Neural (Nam):** Giọng nam trầm ấm, dõng dạc, chuyên nghiệp, rất phù hợp với các khóa học kỹ thuật và kinh doanh.
+   - Hoàn toàn miễn phí 100%, không cần tài khoản hay API key!
+   - Tích hợp thêm tùy chọn **OpenAI TTS (Nova, Alloy, Shimmer...)** cho người dùng muốn sử dụng API Key cá nhân.
 
 ---
 

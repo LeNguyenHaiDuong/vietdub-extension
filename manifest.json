@@ -11,7 +11,8 @@
   "permissions": [
     "storage",
     "activeTab",
-    "tts"
+    "tts",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "*://*.coursera.org/*",
@@ -20,6 +21,9 @@
     "*://*.youtube.com/*",
     "*://translate.googleapis.com/*",
     "*://translate.google.com/*",
+    "*://*.bing.com/*",
+    "*://speech.platform.bing.com/*",
+    "https://api.openai.com/*",
     "<all_urls>"
   ],
   "background": {

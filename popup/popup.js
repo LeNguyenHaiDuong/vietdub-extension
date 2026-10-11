@@ -1,5 +1,6 @@
 /**
  * VietDub - Popup Controller Script
+ * Studio Neural Voice Selection, Real-Time Audio Testing & Advanced Engine Settings
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -10,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const voiceSelect = document.getElementById('voiceSelect');
   const testVoiceBtn = document.getElementById('testVoiceBtn');
+  const voiceQualityBadge = document.getElementById('voiceQualityBadge');
 
   const dubbingVolume = document.getElementById('dubbingVolume');
   const dubbingVolumeVal = document.getElementById('dubbingVolumeVal');
@@ -24,30 +26,60 @@ document.addEventListener('DOMContentLoaded', () => {
   const autoRateToggle = document.getElementById('autoRateToggle');
 
   const ttsEngineSelect = document.getElementById('ttsEngineSelect');
+  const openaiConfigGroup = document.getElementById('openaiConfigGroup');
+  const openaiApiKeyInput = document.getElementById('openaiApiKeyInput');
+  const openaiVoiceGroup = document.getElementById('openaiVoiceGroup');
+  const openaiVoiceSelect = document.getElementById('openaiVoiceSelect');
+
   const subtitlePosSelect = document.getElementById('subtitlePosSelect');
   const fontSizeRange = document.getElementById('fontSizeRange');
   const fontSizeVal = document.getElementById('fontSizeVal');
 
-  let availableVoices = [];
-
-  // ---------------------------------------------------------------------------
-  // 1. Populate Available Vietnamese Voices (Web Speech & Chrome TTS)
-  // ---------------------------------------------------------------------------
-  function renderVoiceDropdown(selectedName = '') {
-    voiceSelect.innerHTML = '';
-
-    if (availableVoices.length === 0) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = 'Giọng tự động (Google Stream Chuẩn)';
-      voiceSelect.appendChild(opt);
-      return;
+  let currentAudioTest = null;
+  let availableVoices = [
+    {
+      name: 'vi-VN-HoaiMyNeural',
+      displayName: '🌟 Hoài My (Nữ - Truyền cảm, tự nhiên VTV)',
+      isNeural: true
+    },
+    {
+      name: 'vi-VN-NamMinhNeural',
+      displayName: '🌟 Nam Minh (Nam - Trầm ấm, chuyên nghiệp)',
+      isNeural: true
     }
+  ];
+
+  // ---------------------------------------------------------------------------
+  // 1. Populate Available Vietnamese Voices
+  // ---------------------------------------------------------------------------
+  function updateBadge(voiceName, engine) {
+    if (!voiceQualityBadge) return;
+    if (engine === 'openai') {
+      voiceQualityBadge.textContent = '🤖 OpenAI Studio';
+      voiceQualityBadge.style.color = '#00ff87';
+      voiceQualityBadge.style.borderColor = 'rgba(0, 255, 135, 0.4)';
+    } else if (voiceName.includes('Neural') || engine === 'edge-neural' || engine === 'auto') {
+      voiceQualityBadge.textContent = '✨ Studio 24kHz';
+      voiceQualityBadge.style.color = 'var(--accent-cyan)';
+      voiceQualityBadge.style.borderColor = 'rgba(0, 242, 254, 0.4)';
+    } else if (engine === 'chrome-tts' || engine === 'web-speech') {
+      voiceQualityBadge.textContent = '🖥️ Hệ thống';
+      voiceQualityBadge.style.color = '#facc15';
+      voiceQualityBadge.style.borderColor = 'rgba(250, 204, 21, 0.4)';
+    } else {
+      voiceQualityBadge.textContent = '🌐 Chuẩn Web';
+      voiceQualityBadge.style.color = '#94a3b8';
+      voiceQualityBadge.style.borderColor = 'rgba(148, 163, 184, 0.4)';
+    }
+  }
+
+  function renderVoiceDropdown(selectedName = 'vi-VN-HoaiMyNeural') {
+    voiceSelect.innerHTML = '';
 
     availableVoices.forEach(v => {
       const opt = document.createElement('option');
       opt.value = v.name;
-      opt.textContent = `${v.name} (${v.lang || 'vi-VN'})`;
+      opt.textContent = v.displayName || v.name;
       if (selectedName && v.name === selectedName) {
         opt.selected = true;
       }
@@ -57,45 +89,64 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!selectedName && availableVoices.length > 0) {
       voiceSelect.value = availableVoices[0].name;
     }
+
+    updateBadge(voiceSelect.value, ttsEngineSelect.value);
   }
 
-  function populateVoices(selectedName = '') {
-    const webVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-    availableVoices = webVoices.filter(v =>
-      (v.lang && v.lang.toLowerCase().startsWith('vi')) ||
-      (v.name && v.name.toLowerCase().includes('vietnam'))
-    );
+  function populateVoices(selectedName = 'vi-VN-HoaiMyNeural') {
+    chrome.runtime.sendMessage({ action: 'GET_CHROME_TTS_VOICES' }, (res) => {
+      const list = [
+        {
+          name: 'vi-VN-HoaiMyNeural',
+          displayName: '🌟 Hoài My (Nữ - Truyền cảm, tự nhiên VTV)',
+          isNeural: true
+        },
+        {
+          name: 'vi-VN-NamMinhNeural',
+          displayName: '🌟 Nam Minh (Nam - Trầm ấm, chuyên nghiệp)',
+          isNeural: true
+        }
+      ];
 
-    // Also fetch native Chrome TTS voices
-    try {
-      chrome.runtime.sendMessage({ action: 'GET_CHROME_TTS_VOICES' }, (res) => {
-        if (res && Array.isArray(res.voices)) {
-          const chromeVi = res.voices.filter(v =>
-            (v.lang && v.lang.toLowerCase().startsWith('vi')) ||
-            (v.voiceName && v.voiceName.toLowerCase().includes('vietnam'))
-          );
-          chromeVi.forEach(cv => {
-            if (!availableVoices.some(v => v.name === cv.voiceName)) {
-              availableVoices.push({
-                name: cv.voiceName,
-                lang: cv.lang || 'vi-VN',
-                isNativeChrome: true
+      if (res && Array.isArray(res.voices)) {
+        res.voices.forEach(v => {
+          const vName = v.voiceName || v.name;
+          if (!list.some(x => x.name === vName)) {
+            list.push({
+              name: vName,
+              displayName: v.displayName || `🖥️ ${vName}`,
+              isNeural: !!v.isNeural
+            });
+          }
+        });
+      }
+
+      // Also merge Web Speech API voices
+      if (window.speechSynthesis) {
+        const webVoices = window.speechSynthesis.getVoices() || [];
+        webVoices
+          .filter(v => (v.lang && v.lang.toLowerCase().startsWith('vi')) || (v.name && v.name.toLowerCase().includes('vietnam')))
+          .forEach(wv => {
+            if (!list.some(x => x.name === wv.name)) {
+              list.push({
+                name: wv.name,
+                displayName: `🖥️ ${wv.name} (Trình duyệt)`,
+                isNeural: false
               });
             }
           });
-        }
-        renderVoiceDropdown(selectedName);
-      });
-    } catch (_) {
+      }
+
+      availableVoices = list;
       renderVoiceDropdown(selectedName);
-    }
+    });
   }
 
   populateVoices();
   if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefined) {
     window.speechSynthesis.onvoiceschanged = () => {
       chrome.storage.local.get(['selectedVoice'], (res) => {
-        populateVoices(res.selectedVoice);
+        populateVoices(res.selectedVoice || 'vi-VN-HoaiMyNeural');
       });
     };
   }
@@ -112,6 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'autoRate',
     'selectedVoice',
     'ttsEngine',
+    'openaiApiKey',
+    'openaiVoice',
     'subtitlePosition',
     'fontSize'
   ], (res) => {
@@ -138,14 +191,24 @@ document.addEventListener('DOMContentLoaded', () => {
     speechRateVal.textContent = `${(rate / 100).toFixed(2)}x`;
 
     // Dropdowns
-    if (res.selectedVoice) {
-      populateVoices(res.selectedVoice);
-    }
+    const chosenVoice = res.selectedVoice || 'vi-VN-HoaiMyNeural';
+    populateVoices(chosenVoice);
+
     if (res.ttsEngine) {
       ttsEngineSelect.value = res.ttsEngine;
     } else {
       ttsEngineSelect.value = 'auto';
     }
+
+    if (res.openaiApiKey) {
+      openaiApiKeyInput.value = res.openaiApiKey;
+    }
+    if (res.openaiVoice) {
+      openaiVoiceSelect.value = res.openaiVoice;
+    }
+
+    toggleOpenAIFields(ttsEngineSelect.value);
+
     if (res.subtitlePosition) {
       subtitlePosSelect.value = res.subtitlePosition;
     }
@@ -162,6 +225,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       statusBanner.classList.add('disabled');
       statusText.textContent = 'VietDub đang tạm tắt';
+    }
+  }
+
+  function toggleOpenAIFields(engine) {
+    const isShowing = engine === 'openai';
+    if (openaiConfigGroup) {
+      openaiConfigGroup.style.display = isShowing ? 'flex' : 'none';
+    }
+    if (openaiVoiceGroup) {
+      openaiVoiceGroup.style.display = isShowing ? 'flex' : 'none';
     }
   }
 
@@ -202,10 +275,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   voiceSelect.addEventListener('change', () => {
     chrome.storage.local.set({ selectedVoice: voiceSelect.value });
+    updateBadge(voiceSelect.value, ttsEngineSelect.value);
   });
 
   ttsEngineSelect.addEventListener('change', () => {
-    chrome.storage.local.set({ ttsEngine: ttsEngineSelect.value });
+    const engine = ttsEngineSelect.value;
+    chrome.storage.local.set({ ttsEngine: engine });
+    toggleOpenAIFields(engine);
+    updateBadge(voiceSelect.value, engine);
+  });
+
+  openaiApiKeyInput.addEventListener('input', () => {
+    chrome.storage.local.set({ openaiApiKey: openaiApiKeyInput.value.trim() });
+  });
+
+  openaiVoiceSelect.addEventListener('change', () => {
+    chrome.storage.local.set({ openaiVoice: openaiVoiceSelect.value });
   });
 
   subtitlePosSelect.addEventListener('change', () => {
@@ -218,65 +303,84 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.set({ fontSize: val });
   });
 
-  // Test Voice Button (Plays through native chrome.tts or audio fallback)
+  // ---------------------------------------------------------------------------
+  // 4. Test Voice Button (Plays High-Definition 24kHz Studio Audio)
+  // ---------------------------------------------------------------------------
   testVoiceBtn.addEventListener('click', () => {
-    const sampleText = 'Xin chào! VietDub chúc bạn học tập hiệu quả trên Coursera và LinkedIn.';
-    testVoiceBtn.textContent = '🔊 Đang đọc...';
+    if (currentAudioTest) {
+      try {
+        currentAudioTest.pause();
+        currentAudioTest = null;
+      } catch (_) {}
+    }
 
-    const selectedVoiceName = voiceSelect.value;
+    const sampleText = 'Xin chào! VietDub chúc bạn học tập hiệu quả trên Coursera và LinkedIn.';
+    testVoiceBtn.textContent = '🔊 Đang tải...';
+
+    const selectedVoiceName = voiceSelect.value || 'vi-VN-HoaiMyNeural';
     const rate = parseInt(speechRate.value, 10) / 100;
     const vol = parseInt(dubbingVolume.value, 10) / 100;
     const engine = ttsEngineSelect.value;
 
     const resetBtn = () => {
       testVoiceBtn.textContent = '🔊 Thử giọng';
+      currentAudioTest = null;
     };
 
-    // If native chrome.tts or auto
-    if (engine === 'chrome-tts' || (engine === 'auto' && selectedVoiceName)) {
-      chrome.runtime.sendMessage({
-        action: 'SPEAK_CHROME_TTS',
-        text: sampleText,
-        rate: rate,
-        volume: vol,
-        voiceName: selectedVoiceName
-      }, (res) => {
-        setTimeout(resetBtn, 2800);
-      });
-      return;
+    // If native chrome.tts or web-speech explicitly chosen with system voice
+    if (engine === 'chrome-tts' || (engine === 'web-speech' && !selectedVoiceName.includes('Neural'))) {
+      if (engine === 'chrome-tts') {
+        chrome.runtime.sendMessage({
+          action: 'SPEAK_CHROME_TTS',
+          text: sampleText,
+          rate: rate,
+          volume: vol,
+          voiceName: selectedVoiceName
+        }, () => {
+          setTimeout(resetBtn, 2500);
+        });
+        return;
+      }
+
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(sampleText);
+        const webVoices = window.speechSynthesis.getVoices();
+        const match = webVoices.find(x => x.name === selectedVoiceName);
+        if (match) utterance.voice = match;
+        utterance.rate = rate;
+        utterance.volume = vol;
+        utterance.onend = resetBtn;
+        utterance.onerror = resetBtn;
+        window.speechSynthesis.speak(utterance);
+        return;
+      }
     }
 
-    // Web Speech API
-    if (window.speechSynthesis && availableVoices.length > 0) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(sampleText);
-      const v = availableVoices.find(x => x.name === selectedVoiceName) || availableVoices[0];
-      if (v) utterance.voice = v;
-      utterance.rate = rate;
-      utterance.volume = vol;
-      utterance.onend = resetBtn;
-      utterance.onerror = resetBtn;
-      window.speechSynthesis.speak(utterance);
-      return;
-    }
-
-    // Google Audio stream fallback via Web Audio
+    // Default & Studio Mode: Fetch 24kHz HD Audio from Edge Neural or OpenAI
+    testVoiceBtn.textContent = '🔊 Đang phát...';
     chrome.runtime.sendMessage({
       action: 'FETCH_TTS_AUDIO',
-      text: sampleText
+      text: sampleText,
+      voiceName: selectedVoiceName,
+      rate: rate
     }, (res) => {
-      if (res && res.audioBase64) {
+      if (res && res.success && res.audioBase64) {
         try {
           const snd = new Audio(`data:audio/mp3;base64,${res.audioBase64}`);
           snd.volume = vol;
-          snd.playbackRate = rate;
+          if (!res.serverRateApplied) {
+            snd.playbackRate = rate;
+          }
           snd.onended = resetBtn;
           snd.onerror = resetBtn;
+          currentAudioTest = snd;
           snd.play().catch(resetBtn);
         } catch (_) {
           resetBtn();
         }
       } else {
+        console.warn('[VietDub Popup] Test voice fetch failed:', res?.error);
         resetBtn();
       }
     });
