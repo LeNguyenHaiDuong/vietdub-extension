@@ -99,8 +99,10 @@
           <div class="control-group">
             <label class="group-label" for="ttsEngineSelect">Cơ chế phát âm (Engine)</label>
             <select id="ttsEngineSelect" class="styled-select">
-              <option value="web-speech">Web Speech API (Mặc định - Chrome/Edge)</option>
-              <option value="google-tts">Google TTS Stream (Dự phòng chất lượng cao)</option>
+              <option value="auto">Tự động (Ưu tiên giọng tự nhiên &amp; dự phòng chuẩn)</option>
+              <option value="chrome-tts">Native Chrome TTS (Hệ thống Chrome)</option>
+              <option value="google-stream">Google Stream (Không lo lỗi hệ điều hành)</option>
+              <option value="web-speech">Web Speech API</option>
             </select>
           </div>
 

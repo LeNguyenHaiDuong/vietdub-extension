@@ -1,6 +1,6 @@
 /**
  * VietDub - Chrome Extension Background Service Worker
- * Handles CORS-free background translation, TTS proxying & state persistence
+ * Handles CORS-free background translation, native chrome.tts, Web Audio streaming & state
  */
 
 // Initialize default settings on install or update
@@ -26,7 +26,7 @@ chrome.runtime.onInstalled.addListener(() => {
       speechRate: 1.05,
       autoRate: true,            // Automatically sync speech speed to subtitle line duration
       selectedVoice: '',
-      ttsEngine: 'web-speech',   // 'web-speech' (Built-in) or 'google-tts' (Direct Stream)
+      ttsEngine: 'auto',         // 'auto' (best available), 'chrome-tts', 'google-stream', 'web-speech'
       subtitlePosition: 'bottom',// 'bottom' or 'top'
       fontSize: 18,
       statsTranslatedCues: 0
@@ -90,7 +90,7 @@ async function translateToVietnamese(text) {
     }
 
     // Keep cache size bounded
-    if (translationCache.size > 1500) {
+    if (translationCache.size > 2000) {
       const firstKey = translationCache.keys().next().value;
       translationCache.delete(firstKey);
     }
@@ -110,16 +110,112 @@ async function translateToVietnamese(text) {
 }
 
 /**
+ * Fetch Google TTS audio as base64 to bypass all web page CSP & CORS restrictions
+ */
+async function fetchTTSAudioBase64(text) {
+  const cleaned = cleanText(text);
+  if (!cleaned) throw new Error('Empty text for TTS');
+
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${encodeURIComponent(cleaned)}`;
+  const response = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`TTS audio stream error: ${response.status}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
  * Message Dispatcher for Content Scripts & Popup
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // 1. Single text translation
   if (request.action === 'TRANSLATE_TEXT') {
     translateToVietnamese(request.text)
       .then(translation => sendResponse({ success: true, translation }))
       .catch(err => sendResponse({ success: false, error: err.message }));
-    return true; // Keep channel open for async response
+    return true;
   }
 
+  // 2. Batch pre-fetch translation for upcoming cues
+  if (request.action === 'PREFETCH_TRANSLATIONS') {
+    if (Array.isArray(request.texts)) {
+      Promise.all(request.texts.map(t => translateToVietnamese(t)))
+        .then(() => sendResponse({ success: true }))
+        .catch(() => sendResponse({ success: false }));
+    } else {
+      sendResponse({ success: true });
+    }
+    return true;
+  }
+
+  // 3. Native chrome.tts API speak
+  if (request.action === 'SPEAK_CHROME_TTS') {
+    const opts = {
+      lang: 'vi-VN',
+      rate: Math.min(Math.max(request.rate || 1.0, 0.7), 1.8),
+      volume: request.volume !== undefined ? request.volume : 1.0,
+      onEvent: (event) => {
+        if (sender.tab && sender.tab.id) {
+          if (event.type === 'start') {
+            chrome.tabs.sendMessage(sender.tab.id, { action: 'TTS_AUDIO_START' }).catch(() => {});
+          } else if (event.type === 'end' || event.type === 'error' || event.type === 'cancelled' || event.type === 'interrupted') {
+            chrome.tabs.sendMessage(sender.tab.id, { action: 'TTS_AUDIO_END' }).catch(() => {});
+          }
+        }
+      }
+    };
+
+    if (request.voiceName) {
+      opts.voiceName = request.voiceName;
+    }
+
+    try {
+      chrome.tts.speak(request.text, opts);
+      sendResponse({ success: true });
+    } catch (e) {
+      console.warn('[VietDub] chrome.tts error:', e);
+      sendResponse({ success: false, error: e.message });
+    }
+    return true;
+  }
+
+  // 4. Stop native chrome.tts
+  if (request.action === 'STOP_CHROME_TTS') {
+    try {
+      chrome.tts.stop();
+    } catch (_) {}
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // 5. Get native Chrome TTS voices
+  if (request.action === 'GET_CHROME_TTS_VOICES') {
+    chrome.tts.getVoices((voices) => {
+      sendResponse({ voices: voices || [] });
+    });
+    return true;
+  }
+
+  // 6. Fetch Google TTS audio as base64 (CSP-immune Web Audio stream)
+  if (request.action === 'FETCH_TTS_AUDIO') {
+    fetchTTSAudioBase64(request.text)
+      .then(audioBase64 => sendResponse({ success: true, audioBase64 }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  // 7. Clear cache
   if (request.action === 'CLEAR_CACHE') {
     translationCache.clear();
     sendResponse({ success: true });

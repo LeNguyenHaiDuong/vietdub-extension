@@ -31,21 +31,15 @@ document.addEventListener('DOMContentLoaded', () => {
   let availableVoices = [];
 
   // ---------------------------------------------------------------------------
-  // 1. Populate Available Vietnamese Voices
+  // 1. Populate Available Vietnamese Voices (Web Speech & Chrome TTS)
   // ---------------------------------------------------------------------------
-  function populateVoices(selectedName = '') {
-    const allVoices = window.speechSynthesis.getVoices();
-    availableVoices = allVoices.filter(v =>
-      (v.lang && v.lang.toLowerCase().startsWith('vi')) ||
-      (v.name && v.name.toLowerCase().includes('vietnam'))
-    );
-
+  function renderVoiceDropdown(selectedName = '') {
     voiceSelect.innerHTML = '';
 
     if (availableVoices.length === 0) {
       const opt = document.createElement('option');
       opt.value = '';
-      opt.textContent = 'Giọng mặc định (Google / Hệ thống)';
+      opt.textContent = 'Giọng tự động (Google Stream Chuẩn)';
       voiceSelect.appendChild(opt);
       return;
     }
@@ -53,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     availableVoices.forEach(v => {
       const opt = document.createElement('option');
       opt.value = v.name;
-      opt.textContent = `${v.name} (${v.lang})`;
+      opt.textContent = `${v.name} (${v.lang || 'vi-VN'})`;
       if (selectedName && v.name === selectedName) {
         opt.selected = true;
       }
@@ -65,8 +59,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function populateVoices(selectedName = '') {
+    const webVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    availableVoices = webVoices.filter(v =>
+      (v.lang && v.lang.toLowerCase().startsWith('vi')) ||
+      (v.name && v.name.toLowerCase().includes('vietnam'))
+    );
+
+    // Also fetch native Chrome TTS voices
+    try {
+      chrome.runtime.sendMessage({ action: 'GET_CHROME_TTS_VOICES' }, (res) => {
+        if (res && Array.isArray(res.voices)) {
+          const chromeVi = res.voices.filter(v =>
+            (v.lang && v.lang.toLowerCase().startsWith('vi')) ||
+            (v.voiceName && v.voiceName.toLowerCase().includes('vietnam'))
+          );
+          chromeVi.forEach(cv => {
+            if (!availableVoices.some(v => v.name === cv.voiceName)) {
+              availableVoices.push({
+                name: cv.voiceName,
+                lang: cv.lang || 'vi-VN',
+                isNativeChrome: true
+              });
+            }
+          });
+        }
+        renderVoiceDropdown(selectedName);
+      });
+    } catch (_) {
+      renderVoiceDropdown(selectedName);
+    }
+  }
+
   populateVoices();
-  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+  if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefined) {
     window.speechSynthesis.onvoiceschanged = () => {
       chrome.storage.local.get(['selectedVoice'], (res) => {
         populateVoices(res.selectedVoice);
@@ -117,6 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (res.ttsEngine) {
       ttsEngineSelect.value = res.ttsEngine;
+    } else {
+      ttsEngineSelect.value = 'auto';
     }
     if (res.subtitlePosition) {
       subtitlePosSelect.value = res.subtitlePosition;
@@ -190,30 +218,67 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.set({ fontSize: val });
   });
 
-  // Test Voice Button
+  // Test Voice Button (Plays through native chrome.tts or audio fallback)
   testVoiceBtn.addEventListener('click', () => {
     const sampleText = 'Xin chào! VietDub chúc bạn học tập hiệu quả trên Coursera và LinkedIn.';
-    window.speechSynthesis.cancel();
+    testVoiceBtn.textContent = '🔊 Đang đọc...';
 
     const selectedVoiceName = voiceSelect.value;
-    const voice = availableVoices.find(v => v.name === selectedVoiceName) || availableVoices[0];
     const rate = parseInt(speechRate.value, 10) / 100;
     const vol = parseInt(dubbingVolume.value, 10) / 100;
+    const engine = ttsEngineSelect.value;
 
-    const utterance = new SpeechSynthesisUtterance(sampleText);
-    if (voice) utterance.voice = voice;
-    utterance.rate = rate;
-    utterance.volume = vol;
-    utterance.pitch = 1.0;
-
-    testVoiceBtn.textContent = '🔊 Đang đọc...';
-    utterance.onend = () => {
-      testVoiceBtn.textContent = '🔊 Thử giọng';
-    };
-    utterance.onerror = () => {
+    const resetBtn = () => {
       testVoiceBtn.textContent = '🔊 Thử giọng';
     };
 
-    window.speechSynthesis.speak(utterance);
+    // If native chrome.tts or auto
+    if (engine === 'chrome-tts' || (engine === 'auto' && selectedVoiceName)) {
+      chrome.runtime.sendMessage({
+        action: 'SPEAK_CHROME_TTS',
+        text: sampleText,
+        rate: rate,
+        volume: vol,
+        voiceName: selectedVoiceName
+      }, (res) => {
+        setTimeout(resetBtn, 2800);
+      });
+      return;
+    }
+
+    // Web Speech API
+    if (window.speechSynthesis && availableVoices.length > 0) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(sampleText);
+      const v = availableVoices.find(x => x.name === selectedVoiceName) || availableVoices[0];
+      if (v) utterance.voice = v;
+      utterance.rate = rate;
+      utterance.volume = vol;
+      utterance.onend = resetBtn;
+      utterance.onerror = resetBtn;
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+
+    // Google Audio stream fallback via Web Audio
+    chrome.runtime.sendMessage({
+      action: 'FETCH_TTS_AUDIO',
+      text: sampleText
+    }, (res) => {
+      if (res && res.audioBase64) {
+        try {
+          const snd = new Audio(`data:audio/mp3;base64,${res.audioBase64}`);
+          snd.volume = vol;
+          snd.playbackRate = rate;
+          snd.onended = resetBtn;
+          snd.onerror = resetBtn;
+          snd.play().catch(resetBtn);
+        } catch (_) {
+          resetBtn();
+        }
+      } else {
+        resetBtn();
+      }
+    });
   });
 });

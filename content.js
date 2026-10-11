@@ -1,6 +1,6 @@
 /**
  * VietDub - Content Script Orchestrator
- * Real-time Video Monitoring, Subtitle Interception, Audio Ducking & TTS Dubbing
+ * High-Speed 0ms Dual-Phase Subtitles, Pre-fetching, Audio Ducking & TTS Dubbing
  */
 
 (function () {
@@ -23,7 +23,7 @@
     speechRate: 1.05,
     autoRate: true,
     selectedVoice: '',
-    ttsEngine: 'web-speech',
+    ttsEngine: 'auto',
     subtitlePosition: 'bottom',
     fontSize: 18
   };
@@ -35,6 +35,7 @@
   let subtitleHideTimeout = null;
   let originalVideoVolume = 1.0;
   let isDucking = false;
+  let lastPrefetchTime = 0;
 
   // UI Elements
   let subtitleOverlay = null;
@@ -203,20 +204,22 @@
     const transEl = subtitleOverlay.querySelector('#vietdubSubTrans');
 
     if (origEl) origEl.textContent = original;
-    if (transEl) transEl.innerHTML = `<span class="highlight-vi">${translated}</span>`;
+    if (transEl) {
+      transEl.innerHTML = `<span class="highlight-vi">${translated}</span>`;
+    }
 
     subtitleOverlay.classList.remove('hidden');
 
     // Auto-hide when duration expires
     if (subtitleHideTimeout) clearTimeout(subtitleHideTimeout);
-    const hideDelay = Math.max(2500, (durationSec || 3) * 1000);
+    const hideDelay = Math.max(3000, (durationSec || 3.5) * 1000);
     subtitleHideTimeout = setTimeout(() => {
       if (subtitleOverlay) subtitleOverlay.classList.add('hidden');
     }, hideDelay);
   }
 
   // ---------------------------------------------------------------------------
-  // 4. Subtitle Processing & Dubbing Orchestrator
+  // 4. Instant Dual-Phase Cue Processing & Pre-fetching
   // ---------------------------------------------------------------------------
   async function processCue(rawText, startTime = null, endTime = null) {
     if (!state.enabled || !rawText) return;
@@ -225,17 +228,51 @@
     if (!sanitized || sanitized === lastProcessedText) return;
     lastProcessedText = sanitized;
 
-    const duration = (endTime && startTime) ? Math.max(1.0, endTime - startTime) : 3.0;
+    const duration = (endTime && startTime && endTime > startTime)
+      ? Math.max(1.0, endTime - startTime)
+      : 3.5;
 
-    // 1. Translate subtitle to Vietnamese (via background service worker)
-    const translated = await translator.translate(sanitized);
+    // Check synchronous cache first (0ms instantaneous lookup)
+    const cachedTranslation = translator.getCached(sanitized);
 
-    // 2. Render bilingual subtitle overlay
-    displaySubtitles(sanitized, translated, duration);
+    if (cachedTranslation) {
+      // 0ms Cache Hit: Display and Speak IMMEDIATELY!
+      displaySubtitles(sanitized, cachedTranslation, duration);
+      if (activeVideo && !activeVideo.paused) {
+        ttsEngine.speak(cachedTranslation, duration);
+      }
+    } else {
+      // Phase 1 (0ms): Immediately show the English cue so the user sees text with ZERO delay!
+      displaySubtitles(sanitized, '⏳ Đang dịch...', duration);
 
-    // 3. Trigger Vietnamese Speech Dubbing
-    if (state.enabled && activeVideo && !activeVideo.paused) {
-      ttsEngine.speak(translated, duration);
+      // Phase 2: Translate in background and update instantly upon resolution
+      const translated = await translator.translate(sanitized);
+      
+      // Update line 2 with translated Vietnamese
+      displaySubtitles(sanitized, translated, duration);
+
+      // Speak Vietnamese voice
+      if (state.enabled && activeVideo && !activeVideo.paused) {
+        ttsEngine.speak(translated, duration);
+      }
+    }
+  }
+
+  /**
+   * Pre-fetch upcoming cues for the next 60 seconds
+   */
+  function prefetchCuesAhead(track, currentTime) {
+    if (!track || !track.cues || track.cues.length === 0) return;
+    const now = Date.now();
+    if (now - lastPrefetchTime < 5000) return; // Limit to once every 5 seconds
+    lastPrefetchTime = now;
+
+    const upcoming = Array.from(track.cues)
+      .filter(c => c.startTime >= currentTime && c.startTime <= currentTime + 60)
+      .map(c => c.text);
+
+    if (upcoming.length > 0) {
+      translator.prefetchUpcoming(upcoming);
     }
   }
 
@@ -255,6 +292,16 @@
       container.style.position = 'relative';
     }
     createUI(container);
+
+    // Unlock Web Audio API & Speech Synthesis on user interaction / video play
+    const unlockAudio = () => {
+      ttsEngine.initAudioContext();
+      if (ttsEngine.audioCtx && ttsEngine.audioCtx.state === 'suspended') {
+        ttsEngine.audioCtx.resume().catch(() => {});
+      }
+    };
+    video.addEventListener('play', unlockAudio);
+    video.addEventListener('playing', unlockAudio);
 
     // Video Lifecycle Events
     video.addEventListener('pause', () => {
@@ -276,6 +323,24 @@
       }
     });
 
+    // Time update listener: fast 250ms synchronization loop
+    video.addEventListener('timeupdate', () => {
+      if (!state.enabled) return;
+
+      // Check textTracks for current cue
+      if (activeTrack && activeTrack.activeCues && activeTrack.activeCues.length > 0) {
+        const cue = activeTrack.activeCues[0];
+        if (cue && cue.text) {
+          processCue(cue.text, cue.startTime, cue.endTime);
+        }
+      }
+
+      // Pre-fetch upcoming cues ahead of playback position
+      if (activeTrack) {
+        prefetchCuesAhead(activeTrack, video.currentTime);
+      }
+    });
+
     // Strategy A: HTML5 textTracks API (Coursera, LinkedIn, Udemy, standard players)
     hookTextTracks(video);
 
@@ -288,6 +353,7 @@
 
     const inspectTracks = () => {
       const tracks = Array.from(video.textTracks);
+      // Prioritize English or active subtitles
       const subTrack = tracks.find(t => t.kind === 'subtitles' || t.kind === 'captions');
 
       if (subTrack && subTrack !== activeTrack) {
@@ -306,6 +372,9 @@
             processCue(cue.text, cue.startTime, cue.endTime);
           }
         });
+
+        // Pre-fetch immediately
+        prefetchCuesAhead(subTrack, video.currentTime);
       }
     };
 
@@ -356,7 +425,7 @@
   // Scan immediately and poll smoothly for dynamic page changes
   loadSettings();
   scanForVideo();
-  setInterval(scanForVideo, 1200);
+  setInterval(scanForVideo, 1000);
 
   // Expose test method for debug in console
   window.__vietDub = {

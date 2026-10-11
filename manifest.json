@@ -10,7 +10,8 @@
   },
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "tts"
   ],
   "host_permissions": [
     "*://*.coursera.org/*",
